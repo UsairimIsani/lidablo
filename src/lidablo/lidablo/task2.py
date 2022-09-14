@@ -56,23 +56,68 @@ class FeatureExtracter(Node):
 
         # transform the transformed points to numpy array
         points_np = np.array(tf_points)
-        plt.figure()
-        plt.scatter(points_np[:, 0], points_np[:, 1])
-        plt.savefig(f"img/{msg}")
+        # plt.figure()
+        # plt.scatter(points_np[:, 0], points_np[:, 1])
+        # plt.savefig(f"img/{msg}")
         return points_np
 
-    def determine_interval(self, ranges, angle_min, angle_increment):
-        angle = angle_min               # start angle
+    def detect_corners(self, msg):
+        angle = msg.angle_min
         tf_points = []
-        for range in ranges:
-            if angle <= (5*math.pi)/3 and angle >= math.pi/3:
-                angle += angle_increment
-                tf_points.append(range)
-            else:
-                angle += angle_increment
-                tf_points.append(0.0)
 
-        return tf_points
+        for r in msg.ranges:
+            x = r * np.cos(angle)
+            y = r * np.sin(angle)
+            angle += msg.angle_increment
+            tf_points.append([x, y])
+
+        points_np = np.array(tf_points)
+
+        step = 9
+        r = len(points_np) - step
+        previous_angle = 0
+        for i in range(0, r+1, step):
+            x_sub = points_np[i:i+step, 0]
+            y_sub = points_np[i:i+step, 1]
+
+            a = np.array([x_sub[0], y_sub[0]])
+            b = np.array([x_sub[3], y_sub[3]])
+            c = np.array([x_sub[8], y_sub[8]])
+
+            ba = a - b
+            bc = c - b
+
+            cosine_angle = np.dot(ba, bc) / \
+                (np.linalg.norm(ba) * np.linalg.norm(bc))
+
+            angle = np.arccos(cosine_angle)
+            angle = np.degrees(angle)
+
+            if angle - previous_angle > 60 and angle - previous_angle < 120:
+                print("Angle ", angle)
+
+            previous_angle = angle
+            # print("Previous angle : ", previous_angle)
+            # print("Angle : ", angle)
+            # print(np.degrees(angle))
+
+    def detect_lines(self, msg):
+        angle = msg.angle_min               # start angle
+        tf_points = []
+        for range in msg.ranges:
+            x = range * np.cos(angle)
+            y = range * np.sin(angle)
+
+            # current angle is last angle add angle_increment
+            angle += msg.angle_increment
+            line = np.polyfit([x], [y], 1)
+            print(line)
+
+            tf_points.append([x, y])
+        # transform the transformed points to numpy array
+        points_np = np.array(tf_points)
+
+        return points_np
 
     def scan_callback(self, msg):
 
@@ -90,16 +135,10 @@ class FeatureExtracter(Node):
 
         ##################################
 
-        # Determine Interval
+        # line = self.detect_lines(msg)
+        # print(line)
 
-        self.polar_to_cartesian_coordinate(
-            msg.ranges, msg.angle_min, msg.angle_max, msg.angle_increment, "org")
-
-        ranges = self.determine_interval(
-            msg.ranges, msg.angle_min, msg.angle_increment)
-
-        self.polar_to_cartesian_coordinate(
-            ranges, msg.angle_min, msg.angle_max, msg.angle_increment, "int")
+        self.detect_corners(msg)
 
         scan = LaserScan()
         scan.header.stamp = msg.header.stamp

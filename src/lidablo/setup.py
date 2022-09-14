@@ -21,7 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'task1 = lidablo.task1:main',
-            'task1 = lidablo.task2:main'
+            'task2 = lidablo.task2:main'
         ],
     },
 )
