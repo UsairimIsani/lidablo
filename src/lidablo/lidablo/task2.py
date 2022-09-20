@@ -62,44 +62,42 @@ class FeatureExtracter(Node):
         return points_np
 
     def detect_corners(self, msg):
-        angle = msg.angle_min
-        tf_points = []
+        total_ranges = len(msg.ranges) - 1
+        window_size = 15
+        step_size = 5
+        accepted_error_rad = 0.1745
+        angles_and_errors = []
+        ranges = self.polar_to_cartesian_coordinate(
+            msg.ranges, msg.angle_min, msg.angle_max, msg.angle_increment, msg)
+        for idx, _ in enumerate(ranges):
+            last_index = idx + window_size
+            if last_index < total_ranges:
+                window = ranges[idx:last_index:step_size]
+                a = np.array(window[0])
+                b = np.array(window[1])
+                c = np.array(window[2])
 
-        for r in msg.ranges:
-            x = r * np.cos(angle)
-            y = r * np.sin(angle)
-            angle += msg.angle_increment
-            tf_points.append([x, y])
+                ba = a - b
+                bc = c - b
 
-        points_np = np.array(tf_points)
+                cosine_angle = np.dot(ba, bc) / \
+                    (np.linalg.norm(ba) * np.linalg.norm(bc))
+                angle = np.arccos(cosine_angle)
 
-        step = 9
-        r = len(points_np) - step
-        previous_angle = 0
-        for i in range(0, r+1, step):
-            x_sub = points_np[i:i+step, 0]
-            y_sub = points_np[i:i+step, 1]
+                # Check angle and find error
+                error = np.abs(angle - (np.pi/2))
 
-            a = np.array([x_sub[0], y_sub[0]])
-            b = np.array([x_sub[3], y_sub[3]])
-            c = np.array([x_sub[8], y_sub[8]])
+                centers = (error, b)  # save center to
+                # angles_and_errors.append(centers)
+                # print(np.degrees(angle))
+                if error <= accepted_error_rad:
+                    print("Found angle", b)
+                    angles_and_errors.append(b)
 
-            ba = a - b
-            bc = c - b
-
-            cosine_angle = np.dot(ba, bc) / \
-                (np.linalg.norm(ba) * np.linalg.norm(bc))
-
-            angle = np.arccos(cosine_angle)
-            angle = np.degrees(angle)
-
-            if angle - previous_angle > 60 and angle - previous_angle < 120:
-                print("Angle ", angle)
-
-            previous_angle = angle
-            # print("Previous angle : ", previous_angle)
-            # print("Angle : ", angle)
-            # print(np.degrees(angle))
+        angles_and_errors = np.array(angles_and_errors)
+        plt.figure()
+        plt.scatter(angles_and_errors[:, 0], angles_and_errors[:, 1])
+        plt.savefig(f"img/corners")
 
     def detect_lines(self, msg):
         angle = msg.angle_min               # start angle
