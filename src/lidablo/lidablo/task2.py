@@ -42,16 +42,16 @@ class FeatureExtracter(Node):
 
     #     return points
 
-    def polar_to_cartesian_coordinate(self, ranges, angle_min, angle_max, angle_increment, msg):
+    def polar_to_cartesian_coordinate(self,  msg):
 
-        angle = angle_min               # start angle
+        angle = msg.angle_min               # start angle
         tf_points = []
-        for range in ranges:
+        for range in msg.ranges:
             x = range * np.cos(angle)
             y = range * np.sin(angle)
 
             # current angle is last angle add angle_increment
-            angle += angle_increment
+            angle += msg.angle_increment
             tf_points.append([x, y])
 
         # transform the transformed points to numpy array
@@ -68,7 +68,7 @@ class FeatureExtracter(Node):
         accepted_error_rad = 0.1745
         angles_and_errors = []
         ranges = self.polar_to_cartesian_coordinate(
-            msg.ranges, msg.angle_min, msg.angle_max, msg.angle_increment, "Detecting Corners.")
+            msg)
 
         for idx, _ in enumerate(ranges):
             last_index = idx + window_size
@@ -105,23 +105,18 @@ class FeatureExtracter(Node):
         plt.savefig(f"img/corners-{msg}")
 
     def plot_lines(self, lines, msg):
-        # plt.figure()
+        plt.figure()
         for line in lines:
             print("Line length : ", len(line))
-            # if len(line) > 0:
-            # plt.scatter(line[:, 0], line[:, 1])
-            # plt.savefig(f"img/lines-{msg}")
+            if len(line) > 0:
+                line = np.array(line)
+                plt.scatter(line[:, 0], line[:, 1])
+        plt.savefig(f"img/lines-{msg}")
 
     def detect_lines(self, msg):
         total_ranges = len(msg.ranges) - 1
 
-        ranges = self.polar_to_cartesian_coordinate(
-            msg.ranges, msg.angle_min, msg.angle_max, msg.angle_increment, "Detecting Corners.")
-
-        # for point in ranges:
-        #     x = []
-        #     y = []
-        # line = np.polyfit(x, y, 1)
+        ranges = self.polar_to_cartesian_coordinate(msg)
 
         accepted_error = 15
         previous_slope = 0
@@ -134,8 +129,8 @@ class FeatureExtracter(Node):
                 current_point = ranges[idx]
                 next_point = ranges[next_idx]
 
-                current_slope = next_point[0] - current_point[0] / \
-                    next_point[1] - current_point[1]
+                current_slope = next_point[1] - current_point[1] / \
+                    next_point[0] - current_point[0]
 
                 slope_diff = np.abs(current_slope - previous_slope)
 
@@ -149,28 +144,9 @@ class FeatureExtracter(Node):
                     line = []
 
                 previous_slope = current_slope
-        print("Number of Lines ", len(lines))
-        lines = np.array(lines, dtype=object)
         return lines
 
     def scan_callback(self, msg):
-
-        # self.polar_to_cartesian_coordinate(
-        # msg.ranges, msg.angle_min,
-        # msg.angle_max, msg.angle_increment)
-
-        #################################
-        ranges = []
-        for r in msg.ranges:
-            if r > 2.5 or r < 1.0:   # Feature extraction code here
-                ranges.append(0.0)
-            else:
-                ranges.append(r)
-
-        ##################################
-
-        # line = self.detect_lines(msg)
-        # print(line)
 
         corners = self.detect_corners(msg)
         lines = self.detect_lines(msg)
@@ -186,7 +162,7 @@ class FeatureExtracter(Node):
         scan.time_increment = msg.time_increment
         scan.range_min = msg.range_min
         scan.range_max = msg.range_max
-        scan.ranges = ranges
+        scan.ranges = msg.ranges
         self.publisher_.publish(scan)
 
         self.scan_idx += 1
