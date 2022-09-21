@@ -68,11 +68,14 @@ class FeatureExtracter(Node):
         accepted_error_rad = 0.1745
         angles_and_errors = []
         ranges = self.polar_to_cartesian_coordinate(
-            msg.ranges, msg.angle_min, msg.angle_max, msg.angle_increment, msg)
+            msg.ranges, msg.angle_min, msg.angle_max, msg.angle_increment, "Detecting Corners.")
+
         for idx, _ in enumerate(ranges):
             last_index = idx + window_size
             if last_index < total_ranges:
                 window = ranges[idx:last_index:step_size]
+
+                # Find the angle between points
                 a = np.array(window[0])
                 b = np.array(window[1])
                 c = np.array(window[2])
@@ -82,40 +85,73 @@ class FeatureExtracter(Node):
 
                 cosine_angle = np.dot(ba, bc) / \
                     (np.linalg.norm(ba) * np.linalg.norm(bc))
+
                 angle = np.arccos(cosine_angle)
 
                 # Check angle and find error
                 error = np.abs(angle - (np.pi/2))
 
-                centers = (error, b)  # save center to
-                # angles_and_errors.append(centers)
-                # print(np.degrees(angle))
                 if error <= accepted_error_rad:
-                    print("Found angle", b)
                     angles_and_errors.append(b)
+                    # print(np.degrees(angle))
 
         angles_and_errors = np.array(angles_and_errors)
+
+        return angles_and_errors
+
+    def plot_corners(self, corners, msg):
         plt.figure()
-        plt.scatter(angles_and_errors[:, 0], angles_and_errors[:, 1])
-        plt.savefig(f"img/corners")
+        plt.scatter(corners[:, 0], corners[:, 1])
+        plt.savefig(f"img/corners-{msg}")
+
+    def plot_lines(self, lines, msg):
+        # plt.figure()
+        for line in lines:
+            print("Line length : ", len(line))
+            # if len(line) > 0:
+            # plt.scatter(line[:, 0], line[:, 1])
+            # plt.savefig(f"img/lines-{msg}")
 
     def detect_lines(self, msg):
-        angle = msg.angle_min               # start angle
-        tf_points = []
-        for range in msg.ranges:
-            x = range * np.cos(angle)
-            y = range * np.sin(angle)
+        total_ranges = len(msg.ranges) - 1
 
-            # current angle is last angle add angle_increment
-            angle += msg.angle_increment
-            line = np.polyfit([x], [y], 1)
-            print(line)
+        ranges = self.polar_to_cartesian_coordinate(
+            msg.ranges, msg.angle_min, msg.angle_max, msg.angle_increment, "Detecting Corners.")
 
-            tf_points.append([x, y])
-        # transform the transformed points to numpy array
-        points_np = np.array(tf_points)
+        # for point in ranges:
+        #     x = []
+        #     y = []
+        # line = np.polyfit(x, y, 1)
 
-        return points_np
+        accepted_error = 15
+        previous_slope = 0
+        line = []
+        lines = []
+        for idx, _ in enumerate(ranges):
+            next_idx = idx + 1
+            if next_idx < total_ranges:
+
+                current_point = ranges[idx]
+                next_point = ranges[next_idx]
+
+                current_slope = next_point[0] - current_point[0] / \
+                    next_point[1] - current_point[1]
+
+                slope_diff = np.abs(current_slope - previous_slope)
+
+                # print("Slope Diff  ", slope_diff)
+
+                if (slope_diff <= accepted_error):
+                    line.append(current_point)
+                else:
+                    # if len(line) > 0:
+                    lines.append(line)
+                    line = []
+
+                previous_slope = current_slope
+        print("Number of Lines ", len(lines))
+        lines = np.array(lines, dtype=object)
+        return lines
 
     def scan_callback(self, msg):
 
@@ -136,7 +172,10 @@ class FeatureExtracter(Node):
         # line = self.detect_lines(msg)
         # print(line)
 
-        self.detect_corners(msg)
+        corners = self.detect_corners(msg)
+        lines = self.detect_lines(msg)
+        self.plot_corners(corners, "Detecting Corners")
+        self.plot_lines(lines, "Detecting Lines")
 
         scan = LaserScan()
         scan.header.stamp = msg.header.stamp
