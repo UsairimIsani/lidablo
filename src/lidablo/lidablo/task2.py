@@ -118,7 +118,7 @@ class FeatureExtracter(Node):
 
         ranges = self.polar_to_cartesian_coordinate(msg)
 
-        accepted_error = 15
+        accepted_error = 0.5
         previous_slope = 0
         line = []
         lines = []
@@ -134,13 +134,13 @@ class FeatureExtracter(Node):
 
                 slope_diff = np.abs(current_slope - previous_slope)
 
-                # print("Slope Diff  ", slope_diff)
+                print("Slope Diff  ", slope_diff)
 
                 if (slope_diff <= accepted_error):
                     line.append(current_point)
                 else:
-                    # if len(line) > 0:
-                    lines.append(line)
+                    if len(line) > 0:
+                        lines.append(line)
                     line = []
 
                 previous_slope = current_slope
