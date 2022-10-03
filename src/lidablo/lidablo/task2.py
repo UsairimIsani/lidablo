@@ -1,9 +1,10 @@
 #! /usr/bin/env python
 
+from cv2 import ellipse2Poly
 import rclpy
 from rclpy.node import Node
 import numpy as np
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, PointCloud
 import math
 
 from matplotlib import pyplot as plt
@@ -23,6 +24,10 @@ class FeatureExtracter(Node):
             self.scan_callback,
             qos_profile=qos_policy)
         self.publisher_ = self.create_publisher(LaserScan, '/feature_scan', 10)
+        self.line_point_publisher = self.create_publisher(
+            PointCloud, '/line_points', 10)
+        self.corner_point_publisher = self.create_publisher(
+            PointCloud, '/center_points', 10)
 
     # def polar_to_cartesian_coordinate(self, ranges, angle_min, angle_max):
     #     angle_step = (angle_max - angle_min) / len(ranges)
@@ -92,7 +97,8 @@ class FeatureExtracter(Node):
 
                 if error <= accepted_error_rad:
                     angles_and_errors.append(b)
-                    # print(np.degrees(angle))
+                else:
+                    angles_and_errors.append(np.array([0, 0]))
 
         angles_and_errors = np.array(angles_and_errors)
 
@@ -137,9 +143,6 @@ class FeatureExtracter(Node):
 
                 calculated_err = np.abs(next_poly[0]) - np.abs(current_poly[0])
 
-                print("next_poly error Diff  ", next_poly)
-                print("current_poly error Diff  ", current_poly)
-
                 if (calculated_err <= accepted_error):
                     line.extend(current_point_group)
                 else:
@@ -147,18 +150,25 @@ class FeatureExtracter(Node):
                     line = []
                     line.extend(current_point_group)
 
-                # previous_slope = current_poly
-        # print("Number of Lines ", len(lines))
         return lines
 
     def scan_callback(self, msg):
 
         corners = self.detect_corners(msg)
+        corner_point_cloud = PointCloud()
+        corner_point_cloud.points = corners
+        self.corner_point_publisher.publish(corner_point_cloud)
+
         lines = self.detect_lines(msg)
+        for line in lines:
+            line_point_cloud = PointCloud()
+            line_point_cloud.points = lines
+            self.line_point_publisher.publish(line_point_cloud)
+
         self.plot_corners(corners, "Detecting Corners")
-        self.plot_corners(
-            self.polar_to_cartesian_coordinate(msg), "Range")
         self.plot_lines(lines, "Detecting Lines")
+
+        self.corner_point_publisher.publish
 
         scan = LaserScan()
         scan.header.stamp = msg.header.stamp
